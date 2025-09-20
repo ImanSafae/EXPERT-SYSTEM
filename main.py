@@ -93,6 +93,32 @@ def init_facts():
 #         raise ValueError("decompose_node: node is already decomposed.")
 #     return make_tree(node.value, node)
 
+def handle_not_operator(condition, index):
+    if index == -1 or index == len(condition) - 1:
+        raise ValueError("Invalid NOT operator usage.")
+    if condition[index + 1] == '(':
+        # Find the matching closing parenthesis
+        open_parens = 1
+        for j in range(index + 2, len(condition)):
+            if condition[j] == '(':
+                open_parens += 1
+            elif condition[j] == ')':
+                open_parens -= 1
+            if open_parens == 0:
+                # Replace !(...) with ( ... ) and add NOT operator
+                inner = condition[index + 2:j]
+                print("inner:", inner)
+                parent_node = Node(NodeTypes.OPERATOR, '!')
+                parent_node.set_left(make_tree(inner))
+                return parent_node
+        raise ValueError("Mismatched parentheses in NOT operator usage.")
+    else:
+        # Handle single character NOT
+        if not condition[index + 1].isalpha():
+            raise ValueError("Invalid character after NOT operator.")
+        parent_node = Node(NodeTypes.OPERATOR, '!')
+        parent_node.set_left(Node(NodeTypes.FACT, condition[index + 1]))
+        return parent_node
 
 def make_tree(condition, parent_node=None):
     condition = condition.strip()
@@ -100,15 +126,16 @@ def make_tree(condition, parent_node=None):
     operators = "+|^"
 
     open_parenthesis_counter = 0
-    condition = condition.strip()
 
     length = len(condition)
-    if condition[0] == '(' and condition[length - 1] == ')':
-        condition = condition[1:(length - 1)].strip()
+    if condition[0] == '(' and condition[length - 1] == ')' and len(Utils.find_all_indexes(condition, '(')) == 1:
+        condition = condition[1:(length - 1)].strip()  
         length -= 2
     for i in range(length):
         index = (length - 1 - i)
         char = condition[index]
+        if char.isspace():
+            continue
         if char == ')':
             open_parenthesis_counter += 1
             continue
@@ -133,11 +160,9 @@ def make_tree(condition, parent_node=None):
                 # parent_node.set_right(decompose_node(parent_node.get_right()))
                 parent_node.set_right(make_tree(parent_node.get_right().get_value(), parent_node.get_right()))
             break
-        if (char == "!") and (length == 2):
-            parent_node.set_type(NodeTypes.OPERATOR)
-            parent_node.set_value("!")
-            parent_node.set_left(Node(NodeTypes.FACT, condition[length - 1]))
-        if (char.isalpha()) and (length == 1):
+        elif (char == "!"):
+            parent_node = handle_not_operator(condition, index)
+        elif (char.isalpha()) and (length == 1):
             parent_node = Node(NodeTypes.FACT, char)
     return parent_node
 
@@ -148,47 +173,62 @@ def addition(a, b):
         return None
     return False
 
-def or_operation(a, b):
+def or_operation(a, b) :
     if (a is True) or (b is True):
         return True
     if (a is None) and (b is None):
         return None
     return False
 
+
 def solve_simple_fact(left, right, operator):
+    """
+    Takes two facts ("A", "B", etc.), or their boolean values, as well as an operator (AND, OR, XOR, NOT).
+    Fetches the facts' boolean values from the Facts dictionary when needed, and applies the operator.
+    """
     if isinstance(left, str):
         left = left.strip()
+        if left not in Facts:
+            raise ValueError(f"Arg 1 should be a valid fact (alpha character) or its boolean value. Got '{left}' instead.")
         left = Facts[left]
     if isinstance(right, str):
         right = right.strip()
+        if right not in Facts:
+            raise ValueError(f"Arg 2 should be a valid fact (alpha character) or its boolean value. Got '{right}' instead.")
         right = Facts[right]
     print(f"Facts left: {left}, right: {right}, operator: {operator}")
-    if (operator is OperatorsEnum.AND.value):
+    if (operator == OperatorsEnum.AND.value):
         return addition(left, right)
-    elif (operator is OperatorsEnum.OR.value):
+    elif (operator == OperatorsEnum.OR.value):
         return or_operation(left, right)
-    elif (operator is OperatorsEnum.XOR.value):
+    elif (operator == OperatorsEnum.XOR.value):
         return (left ^ right)
-    elif (operator is OperatorsEnum.NOT.value):
+    elif (operator == OperatorsEnum.NOT.value):
         return (not left)
     else:
         raise ValueError("Operator isn't in the expected range.")
 
 def solve_tree(parent_node):
     result = None
-    left_child = parent_node.get_left()
-    right_child = parent_node.get_right()
+    left = parent_node.get_left()
+    right = parent_node.get_right()
     if (parent_node.is_leaf()):
         return parent_node
     # problem: on essaie direct de solve avant de créer toutes les branches
-    while (left_child and not left_child.is_leaf()):
-        left_child = solve_tree(left_child)
-        parent_node.set_left(left_child)
-    while (right_child and not right_child.is_leaf()):
-        right_child = solve_tree(right_child)
-        parent_node.set_right(right_child)
-    if (left_child.is_leaf() and right_child.is_leaf()):
-        result = solve_simple_fact(left_child.get_value(), right_child.get_value(), parent_node.get_value().strip())
+    if (left and not left.is_leaf()):
+        left = solve_tree(left)
+        parent_node.set_left(left)
+    if (right and not right.is_leaf()):
+        right = solve_tree(right)
+        parent_node.set_right(right)
+    # simplifier ci-dessous
+    if (parent_node.get_value() == '!'):
+        result = solve_simple_fact(left.get_value(), None, parent_node.get_value().strip())
+        parent_node.set_type(NodeTypes.FACT)
+        parent_node.set_value(result)
+        parent_node.remove_children()
+    elif (left.is_leaf() and right.is_leaf()):
+        result = solve_simple_fact(left.get_value(), right.get_value(), parent_node.get_value().strip())
         parent_node.set_type(NodeTypes.FACT)
         parent_node.set_value(result)
         parent_node.remove_children()
@@ -238,9 +278,11 @@ if __name__ == "__main__":
         sys.exit(1)
     init_facts()
 
-    with open(input_filename, "r") as input:
-        parse_inputfile(input)
-        solve_queries()
+    handle_not_operator("A + !(B | C)")
+
+    # with open(input_filename, "r") as input:
+    #     parse_inputfile(input)
+    #     solve_queries()
     
     # print('\n'.join(str(rule) for rule in Rules))
     # print("Facts:", Facts)

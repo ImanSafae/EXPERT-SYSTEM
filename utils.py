@@ -37,7 +37,7 @@ class Utils:
             if ((not char in string.ascii_letters) and (not char in Utils.authorized_symbols)):
                 print(f"Invalid character found: {char}")
                 return False
-            return True
+        return True
 
     @staticmethod    
     def is_rule_valid(rule):
@@ -65,3 +65,11 @@ class Utils:
             if (rule.relation == "if and only if" and query in rule.conditions):
                 associated_rules.append(rule)
         return associated_rules
+    
+    @staticmethod
+    def find_all_indexes(str, char):
+        indexes = []
+        for i in range(len(str)):
+            if str[i] == char:
+                indexes.append(i)
+        return indexes
