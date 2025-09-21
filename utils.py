@@ -62,8 +62,8 @@ class Utils:
             if (query in rule.conclusions):
                 associated_rules.append(rule)
                 continue
-            if (rule.relation == "if and only if" and query in rule.conditions):
-                associated_rules.append(rule)
+            # if (rule.relation == "if and only if" and query in rule.conditions):
+            #     associated_rules.append(rule)
         return associated_rules
     
     @staticmethod

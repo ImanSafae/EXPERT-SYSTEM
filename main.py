@@ -121,12 +121,9 @@ def handle_not_operator(condition, index):
         return parent_node
 
 def make_tree(condition, parent_node=None):
-    condition = condition.strip()
-    print("conditions:", condition)
     operators = "+|^"
-
     open_parenthesis_counter = 0
-
+    condition = condition.strip()
     length = len(condition)
     if condition[0] == '(' and condition[length - 1] == ')' and len(Utils.find_all_indexes(condition, '(')) == 1:
         condition = condition[1:(length - 1)].strip()  
@@ -210,30 +207,70 @@ def solve_simple_fact(left, right, operator):
 
 def solve_tree(parent_node):
     result = None
+
+    def node_to_value(node):
+        """Convert a leaf node's value to a boolean/None. If the leaf stores a fact name (str),
+        return Facts.get(name, None). If it already stores a boolean/None, return it as-is.
+        """
+        if node is None:
+            return None
+        val = node.get_value()
+        if isinstance(val, str):
+            return Facts.get(val.strip(), None)
+        return val
+
+    # short-circuit: already a leaf
+    if parent_node.is_leaf():
+        return parent_node
+
+    # resolve children recursively if needed
     left = parent_node.get_left()
     right = parent_node.get_right()
-    if (parent_node.is_leaf()):
-        return parent_node
-    # problem: on essaie direct de solve avant de créer toutes les branches
-    if (left and not left.is_leaf()):
+    if left is not None and not left.is_leaf():
         left = solve_tree(left)
         parent_node.set_left(left)
-    if (right and not right.is_leaf()):
+    if right is not None and not right.is_leaf():
         right = solve_tree(right)
         parent_node.set_right(right)
-    # simplifier ci-dessous
-    if (parent_node.get_value() == '!'):
-        result = solve_simple_fact(left.get_value(), None, parent_node.get_value().strip())
+
+    operator = parent_node.get_value().strip()
+
+    if operator == OperatorsEnum.NOT.value:
+        # accept child in left or right (prefer left if present)
+        child = left
+        if child is None:
+            raise ValueError("NOT operator node has no child.")
+        cval = node_to_value(child)
+        result = None if cval is None else (not cval)
         parent_node.set_type(NodeTypes.FACT)
         parent_node.set_value(result)
         parent_node.remove_children()
-    elif (left.is_leaf() and right.is_leaf()):
-        result = solve_simple_fact(left.get_value(), right.get_value(), parent_node.get_value().strip())
-        parent_node.set_type(NodeTypes.FACT)
-        parent_node.set_value(result)
-        parent_node.remove_children()
+        print("result:", result)
+        return parent_node
+
+    # binary operators: ensure both children exist
+    if left is None or right is None:
+        raise ValueError("Binary operator node missing left or right child.")
+
+    lval = node_to_value(left)
+    rval = node_to_value(right)
+
+    if operator == OperatorsEnum.AND.value:
+        result = addition(lval, rval)
+    elif operator == OperatorsEnum.OR.value:
+        result = or_operation(lval, rval)
+    elif operator == OperatorsEnum.XOR.value:
+        result = None if (lval is None or rval is None) else (lval ^ rval)
+    else:
+        raise ValueError(f"Unknown operator: {operator}")
+
+    parent_node.set_type(NodeTypes.FACT)
+    parent_node.set_value(result)
+    parent_node.remove_children()
     print("result:", result)
     return parent_node
+
+
 
 def solve_query(query):
     if (Facts[query] == True) or (Facts[query] == None):
@@ -245,26 +282,30 @@ def solve_query(query):
     for rule in associated_rules:
         conditions = rule.conditions
         print(f"conditions to solve: {conditions}")
-        # chercher si on connait déjà la valeur des conditions
-        # sinon, appeler en récursif pour chaque condition
         tree = make_tree(conditions)
-        leaves = tree.get_leaves()
-        for leaf in leaves:
-            if (Facts[leaf.get_value()] == False):
-                solve_query(leaf.get_value())
-    if tree:
+        # leaves = tree.get_leaves()
+        # ici on peut chercher à étendre les leaves en cherchant toutes les rules associées
+        # print(f"Leaves to solve: {[leaf.get_value() for leaf in leaves]}")
+        # for leaf in leaves:
+            # if (Facts[leaf.get_value()] == False):
+                # print(f"Solving leaf: {leaf.get_value()}")
+                # solve_query(leaf.get_value())
+        last_nodes = tree.get_last_nodes()
+        for node in last_nodes:
+            solve_node(node)
+    # if tree:
         # print("tree:", tree.get_value())
-        solve_tree(tree)
-    else:
-        print(f"No rules associated with {query}. Cannot determine its value.")
+        # solve_tree(tree)
+    # else:
+        # print(f"No rules associated with {query}. Cannot determine its value.")
 
 
 def solve_queries():
-    # try:
-    for query in Queries:
-        solve_query(query)
-    # except Exception as e:
-    #     print(f"Error occurred while solving queries: {e}")
+    try:
+        for query in Queries:
+            solve_query(query)
+    except Exception as e:
+        print(f"Error occurred while solving queries: {e}")
 
 
 if __name__ == "__main__":
@@ -278,24 +319,6 @@ if __name__ == "__main__":
         sys.exit(1)
     init_facts()
 
-    handle_not_operator("A + !(B | C)")
-
-    # with open(input_filename, "r") as input:
-    #     parse_inputfile(input)
-    #     solve_queries()
-    
-    # print('\n'.join(str(rule) for rule in Rules))
-    # print("Facts:", Facts)
-    # print("Queries:", Queries)
-    # tree = make_tree("A + B")
-    # solve_tree(tree)
-    # print(tree)
-    # left_child = tree.get_left()
-    # right_child = tree.get_right()
-
-    # if (left_child.get_left() is not None) or (left_child.get_right() is not None):
-    #     print("Left child decomposed:")
-    #     print(left_child)
-    # if (right_child.get_left() is not None) or (right_child.get_right() is not None):
-    #     print("Right child decomposed:")
-    #     print(right_child)
+    with open(input_filename, "r") as input:
+        parse_inputfile(input)
+        solve_queries()

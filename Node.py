@@ -75,13 +75,27 @@ class Node:
         if (self.right is None and self.left is None):
             leaves.append(self)
             return leaves
-        if (self.right and self.right.is_leaf()):
-            leaves.append(self.right)
         if (self.left and self.left.is_leaf()):
             leaves.append(self.left)
-        if (self.right and not self.right.is_leaf()):
-            leaves.extend(self.right.get_leaves())
+        if (self.right and self.right.is_leaf()):
+            leaves.append(self.right)
         if (self.left and not self.left.is_leaf()):
             leaves.extend(self.left.get_leaves())
+        if (self.right and not self.right.is_leaf()):
+            leaves.extend(self.right.get_leaves())
         return leaves
-
+    
+    def get_last_nodes(self):
+        nodes = []
+        left = self.get_left()
+        right = self.get_right()
+        if (left.is_leaf() and right.is_leaf()):
+            nodes.append(self)
+        else:
+            if (not left.is_leaf()):
+                nodes.extend(left.get_last_nodes())
+            if (not right.is_leaf()):
+                nodes.extend(right.get_last_nodes())
+        return nodes
+    
+    
