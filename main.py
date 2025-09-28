@@ -10,6 +10,7 @@ import sys
 Rules = []
 Facts = {}
 Queries = []
+Queue = []
 
 def extract_rule(line):
     relation = ""
@@ -86,12 +87,6 @@ def init_facts():
         letter = chr(ord_a + i)
         Facts[letter] = False
 
-# def decompose_node(node):
-#     if (not isinstance(node, Node)):
-#         raise TypeError("decompose_node: arg should be of type Node.")
-#     if (node.get_type() != NodeTypes.PHRASE):
-#         raise ValueError("decompose_node: node is already decomposed.")
-#     return make_tree(node.value, node)
 
 def handle_not_operator(condition, index):
     if index == -1 or index == len(condition) - 1:
@@ -109,7 +104,7 @@ def handle_not_operator(condition, index):
                 inner = condition[index + 2:j]
                 print("inner:", inner)
                 parent_node = Node(NodeTypes.OPERATOR, '!')
-                parent_node.set_left(make_tree(inner))
+                parent_node.set_left(parse_condition_into_tree(inner))
                 return parent_node
         raise ValueError("Mismatched parentheses in NOT operator usage.")
     else:
@@ -120,14 +115,37 @@ def handle_not_operator(condition, index):
         parent_node.set_left(Node(NodeTypes.FACT, condition[index + 1]))
         return parent_node
 
-def make_tree(condition, parent_node=None):
+
+def parse_condition_into_tree(condition):
+    """
+    Parse a condition string (like "A+B|C") into a Node tree.
+    Uses right-to-left scan to respect precedence encoded by parentheses.
+    """
+    if condition is None:
+        raise ValueError("Empty condition")
+    condition = condition.strip()
+    if len(condition) == 0:
+        raise ValueError("Empty condition")
+
+    length = len(condition)
+    if condition[0] == '(' and condition[-1] == ')':
+        open_parens = 0
+        encloses = True
+        for i, ch in enumerate(condition):
+            if ch == '(':
+                open_parens += 1
+            elif ch == ')':
+                open_parens -= 1
+                if open_parens == 0 and i < length - 1:
+                    encloses = False
+                    break
+        if encloses:
+            condition = condition[1:-1].strip()
+            length = len(condition)
+
     operators = "+|^"
     open_parenthesis_counter = 0
-    condition = condition.strip()
-    length = len(condition)
-    if condition[0] == '(' and condition[length - 1] == ')' and len(Utils.find_all_indexes(condition, '(')) == 1:
-        condition = condition[1:(length - 1)].strip()  
-        length -= 2
+
     for i in range(length):
         index = (length - 1 - i)
         char = condition[index]
@@ -137,7 +155,7 @@ def make_tree(condition, parent_node=None):
             open_parenthesis_counter += 1
             continue
         elif char == '(':
-            open_parenthesis_counter -=1
+            open_parenthesis_counter -= 1
         if open_parenthesis_counter > 0:
             continue
         if char in operators:
@@ -149,157 +167,218 @@ def make_tree(condition, parent_node=None):
             parent_node.set_left(Node(left_node_type, left_node_content))
             parent_node.set_right(Node(right_node_type, right_node_content))
             if (parent_node.get_left().get_type() == NodeTypes.PHRASE):
-                # print("decomposing left child")
-                # parent_node.set_left(decompose_node(parent_node.get_left()))
-                parent_node.set_left(make_tree(parent_node.get_left().get_value(), parent_node.get_left()))
+                parent_node.set_left(parse_condition_into_tree(parent_node.get_left().get_value()))
             if (parent_node.get_right().get_type() == NodeTypes.PHRASE):
-                # print("decomposing right child")
-                # parent_node.set_right(decompose_node(parent_node.get_right()))
-                parent_node.set_right(make_tree(parent_node.get_right().get_value(), parent_node.get_right()))
-            break
-        elif (char == "!"):
-            parent_node = handle_not_operator(condition, index)
+                parent_node.set_right(parse_condition_into_tree(parent_node.get_right().get_value()))
+            return parent_node
+        elif (char == '!'):
+            return handle_not_operator(condition, index)
         elif (char.isalpha()) and (length == 1):
-            parent_node = Node(NodeTypes.FACT, char)
-    return parent_node
+            return Node(NodeTypes.FACT, char)
 
-def addition(a, b):
-    if (a is True) and (b is True):
-        return True
-    if (a is None) or (b is None):
-        return None
-    return False
+    return Node(NodeTypes.PHRASE, condition)
 
-def or_operation(a, b) :
-    if (a is True) or (b is True):
-        return True
-    if (a is None) and (b is None):
-        return None
-    return False
-
-
-def solve_simple_fact(left, right, operator):
-    """
-    Takes two facts ("A", "B", etc.), or their boolean values, as well as an operator (AND, OR, XOR, NOT).
-    Fetches the facts' boolean values from the Facts dictionary when needed, and applies the operator.
-    """
-    if isinstance(left, str):
-        left = left.strip()
-        if left not in Facts:
-            raise ValueError(f"Arg 1 should be a valid fact (alpha character) or its boolean value. Got '{left}' instead.")
-        left = Facts[left]
-    if isinstance(right, str):
-        right = right.strip()
-        if right not in Facts:
-            raise ValueError(f"Arg 2 should be a valid fact (alpha character) or its boolean value. Got '{right}' instead.")
-        right = Facts[right]
-    print(f"Facts left: {left}, right: {right}, operator: {operator}")
-    if (operator == OperatorsEnum.AND.value):
-        return addition(left, right)
-    elif (operator == OperatorsEnum.OR.value):
-        return or_operation(left, right)
-    elif (operator == OperatorsEnum.XOR.value):
-        return (left ^ right)
-    elif (operator == OperatorsEnum.NOT.value):
-        return (not left)
+def solve_not(node):
+    if not isinstance(node, Node):
+        raise TypeError("solve_not: arg should be of type Node.")
+    if node.get_type() != NodeTypes.OPERATOR or node.get_value() != OperatorsEnum.NOT.value:
+        raise ValueError("solve_not: node should contain a NOT operator.")
+    child = node.get_left()
+    if child is None:
+        raise ValueError("solve_not: NOT operator node has no child.")
+    if child.get_type() != NodeTypes.FACT:
+        raise ValueError("solve_not: child of NOT operator should be a FACT node.")
+    fact = child.get_value()
+    if not fact.isalpha() or len(fact) != 1:
+        raise ValueError("solve_not: child node value should be a single alphabetic character representing a fact.")
+    value = Facts[fact.upper()]
+    if value is None:
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(None)
     else:
-        raise ValueError("Operator isn't in the expected range.")
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(not value)
+    node.remove_children()
+    return node
 
-def solve_tree(parent_node):
-    result = None
-
-    def node_to_value(node):
-        """Convert a leaf node's value to a boolean/None. If the leaf stores a fact name (str),
-        return Facts.get(name, None). If it already stores a boolean/None, return it as-is.
-        """
-        if node is None:
-            return None
-        val = node.get_value()
-        if isinstance(val, str):
-            return Facts.get(val.strip(), None)
-        return val
-
-    # short-circuit: already a leaf
-    if parent_node.is_leaf():
-        return parent_node
-
-    # resolve children recursively if needed
-    left = parent_node.get_left()
-    right = parent_node.get_right()
-    if left is not None and not left.is_leaf():
-        left = solve_tree(left)
-        parent_node.set_left(left)
-    if right is not None and not right.is_leaf():
-        right = solve_tree(right)
-        parent_node.set_right(right)
-
-    operator = parent_node.get_value().strip()
-
-    if operator == OperatorsEnum.NOT.value:
-        # accept child in left or right (prefer left if present)
-        child = left
-        if child is None:
-            raise ValueError("NOT operator node has no child.")
-        cval = node_to_value(child)
-        result = None if cval is None else (not cval)
-        parent_node.set_type(NodeTypes.FACT)
-        parent_node.set_value(result)
-        parent_node.remove_children()
-        print("result:", result)
-        return parent_node
-
-    # binary operators: ensure both children exist
+def solve_addition(node):
+    if node.get_type() != NodeTypes.OPERATOR or node.get_value() != OperatorsEnum.AND.value:
+        raise ValueError("solve_addition: node should contain an AND operator.")
+    left = node.get_left()
+    right = node.get_right()
     if left is None or right is None:
-        raise ValueError("Binary operator node missing left or right child.")
-
-    lval = node_to_value(left)
-    rval = node_to_value(right)
-
-    if operator == OperatorsEnum.AND.value:
-        result = addition(lval, rval)
-    elif operator == OperatorsEnum.OR.value:
-        result = or_operation(lval, rval)
-    elif operator == OperatorsEnum.XOR.value:
-        result = None if (lval is None or rval is None) else (lval ^ rval)
+        raise ValueError("solve_addition: AND operator node missing left or right child. Cannot solve addition without two facts.")
+    lfact = left.get_value()
+    rfact = right.get_value()
+    if not (lfact.isalpha() and len(lfact) == 1) and not (isinstance(lfact, bool)):
+        raise ValueError("solve_addition: left child node value should be a single alphabetic character representing a fact.")
+    if not (rfact.isalpha() and len(rfact) == 1) and not (isinstance(rfact, bool)):
+        raise ValueError("solve_addition: right child node value should be a single alphabetic character representing a fact.")
+    if not isinstance(lfact, bool):
+        lvalue = Facts[lfact.upper()]
     else:
-        raise ValueError(f"Unknown operator: {operator}")
+        lvalue = lfact
+    if not isinstance(rfact, bool):
+        rvalue = Facts[rfact.upper()]
+    else:
+        rvalue = rfact
+    if lvalue is None or rvalue is None:
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(None)
+    else:
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(lvalue and rvalue)
+    node.remove_children()
+    return node
 
-    parent_node.set_type(NodeTypes.FACT)
-    parent_node.set_value(result)
-    parent_node.remove_children()
-    print("result:", result)
+def solve_or(node):
+    if node.get_type() != NodeTypes.OPERATOR or node.get_value() != OperatorsEnum.OR.value:
+        raise ValueError("solve_or: node should contain an OR operator.")
+    left = node.get_left()
+    right = node.get_right()
+    if left is None or right is None:
+        raise ValueError("solve_or: OR operator node missing left or right child. Cannot solve OR without two facts.")
+    lfact = left.get_value()
+    rfact = right.get_value()
+    if not (lfact.isalpha() and len(lfact) == 1) and not (isinstance(lfact, bool)):
+        raise ValueError("solve_or: left child node value should be a single alphabetic character representing a fact.")
+    if not (rfact.isalpha() and len(rfact) == 1) and not (isinstance(rfact, bool)):
+        raise ValueError("solve_or: right child node value should be a single alphabetic character representing a fact.")
+    if not isinstance(lfact, bool):
+        lvalue = Facts[lfact.upper()]
+    else:
+        lvalue = lfact
+    if not isinstance(rfact, bool):
+        rvalue = Facts[rfact.upper()]
+    else:
+        rvalue = rfact
+    if lvalue is None or rvalue is None:
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(None)
+    else:
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(lvalue or rvalue)
+    node.remove_children()
+    return node
+
+def solve_xor(node):
+    if node.get_type() != NodeTypes.OPERATOR or node.get_value() != OperatorsEnum.XOR.value:
+        raise ValueError("solve_xor: node should contain an XOR operator.")
+    left = node.get_left()
+    right = node.get_right()
+    if left is None or right is None:
+        raise ValueError("solve_xor: XOR operator node missing left or right child. Cannot solve XOR without two facts.")
+    lfact = left.get_value()
+    rfact = right.get_value()
+    if not (lfact.isalpha() and len(lfact) == 1) and not (isinstance(lfact, bool)):
+        raise ValueError("solve_xor: left child node value should be a single alphabetic character representing a fact.")
+    if not (rfact.isalpha() and len(rfact) == 1) and not (isinstance(rfact, bool)):
+        raise ValueError("solve_xor: right child node value should be a single alphabetic character representing a fact.")
+    if not isinstance(lfact, bool):
+        lvalue = Facts[lfact.upper()]
+    else:
+        lvalue = lfact
+    if not isinstance(rfact, bool):
+        rvalue = Facts[rfact.upper()]
+    else:
+        rvalue = rfact
+    if lvalue is None or rvalue is None:
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(None)
+    else:
+        node.set_type(NodeTypes.BOOLEAN)
+        node.set_value(lvalue ^ rvalue)
+    node.remove_children()
+    return node
+
+def make_tree(parent_node):
+    """
+    Recursively extend a FACT node by finding associated rules and
+    adding their condition trees as children until no more expansions
+    are possible. Protects against cycles using the `seen` set and
+    avoids re-expanding a fact that already has children.
+    """
+    if (not isinstance(parent_node, Node)):
+        raise TypeError("make_tree: arg should be of type Node.")
+    if (parent_node.get_type() != NodeTypes.FACT):
+        raise ValueError("make_tree: node is not of type FACT.")
+    fact = parent_node.get_value()
+    associated_rules = Utils.find_associated_rules(fact, Rules)
+    for rule in associated_rules:
+        conditions = rule.conditions  # adjust later to take into account "if and only if"
+        new_child = parse_condition_into_tree(conditions)
+        parent_node.add_child(new_child)
+    for child in parent_node.get_children():
+        leaves = child.get_leaves()
+        for leaf in leaves:
+            if leaf.get_type() != NodeTypes.FACT:
+                continue
+            leaf_fact = leaf.get_value().strip().upper()
+            if Facts.get(leaf_fact) is True or Facts.get(leaf_fact) is None:
+                continue
+            leaf = make_tree(leaf)
     return parent_node
 
+def solve_fact_node(node):
+    conditions = node.get_children()
+    print(f"Solving query {node.get_value()} with {len(conditions)} condition(s).")
+    for condition in conditions:
+        print("solving condition:", condition.get_value())
+        type = condition.get_type()
+        match type:
+            case NodeTypes.FACT:
+                condition = solve_fact_node(condition)
+                if condition.get_type() != NodeTypes.BOOLEAN:
+                    raise ValueError("Condition did not resolve to a boolean value.")
+                if condition.get_value() is True:
+                    Facts[node.get_value()] = True
+                    print(f"Fact {node.get_value()} set to True based on condition.")
+                    node.set_type(NodeTypes.BOOLEAN)
+                    node.set_value(True)
+                    return node
+                else:
+                    print(f"Condition {condition.get_value()} evaluated to False or None: {condition.get_value()}. Continuing to next condition.")
+                continue
+            case NodeTypes.OPERATOR:
+                condition = solve_operator_node(condition)
+                if condition.get_type() != NodeTypes.BOOLEAN:
+                    raise ValueError("Condition did not resolve to a boolean value.")
+                if condition.get_value() is True:
+                    Facts[node.get_value()] = True
+                    print(f"Fact {node.get_value()} set to True based on condition.")
+                    node.set_type(NodeTypes.BOOLEAN)
+                    node.set_value(True)
+                    return node
+                continue
+            case NodeTypes.PHRASE:
+                raise SystemError("Something went wrong during tree construction. Condition node should not be of type PHRASE.")
 
+def solve_operator_node(node):
+    type = node.get_type()
+    value = node.get_value()
+    if type != NodeTypes.OPERATOR:
+        raise ValueError("solve_operator_node: node is not of type OPERATOR.")
+    match value:
+        case OperatorsEnum.NOT.value:
+            node = solve_not(node)
+        case OperatorsEnum.AND.value:
+            node = solve_addition(node)
+        case OperatorsEnum.OR.value:
+            node = solve_or(node)
+        case OperatorsEnum.XOR.value:
+            node = solve_xor(node)
+        case _:
+            raise ValueError(f"Unknown operator: {value}")
+    return node
 
 def solve_query(query):
     if (Facts[query] == True) or (Facts[query] == None):
         print(f"{query} is {Facts[query]}")
-        return # si le fact est déjà True ou indéterminé, c'est qu'on l'a déjà traité
-    associated_rules = Utils.find_associated_rules(query, Rules)
-    tree = None
-    print(f"Rules associated with {query}:")
-    for rule in associated_rules:
-        conditions = rule.conditions
-        print(f"conditions to solve: {conditions}")
-        tree = make_tree(conditions)
-        # leaves = tree.get_leaves()
-        # ici on peut chercher à étendre les leaves en cherchant toutes les rules associées
-        # print(f"Leaves to solve: {[leaf.get_value() for leaf in leaves]}")
-        # for leaf in leaves:
-            # if (Facts[leaf.get_value()] == False):
-                # print(f"Solving leaf: {leaf.get_value()}")
-                # solve_query(leaf.get_value())
-        last_nodes = tree.get_last_nodes()
-        for node in last_nodes:
-            solve_node(node)
-    # if tree:
-        # print("tree:", tree.get_value())
-        # solve_tree(tree)
-    # else:
-        # print(f"No rules associated with {query}. Cannot determine its value.")
-
-
+        return
+    parent_node = Node(NodeTypes.FACT, query)
+    tree = make_tree(parent_node) # thanks to the recursion, all subtrees are made too in this tree
+    tree = solve_fact_node(tree)
+    print(f"{query} is {Facts[query]}")
 def solve_queries():
     try:
         for query in Queries:
