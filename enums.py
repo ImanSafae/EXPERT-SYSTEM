@@ -25,8 +25,6 @@ class RelationEnum(Enum):
 class NodeTypes(Enum):
     OPERATOR = 0
     FACT = 1  # a letter, a query to be solved
-    PHRASE = 2  # temporary node (like "(A + B)") that will be decomposed
-    BOOLEAN = 3  # type of node that will hold a boolean value after evaluation
 
 
 class ChildLinkTypes(Enum):

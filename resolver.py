@@ -71,7 +71,6 @@ def find_associated_rules(query: str, rules: list[Rule]) -> list[Rule]:
     return associated_rules
 
 def tokenize(expr: str) -> list[str]:
-    """Découpe l'expression en jetons : variables, opérateurs, parenthèses"""
     tokens = []
     i = 0
     while i < len(expr):
@@ -94,10 +93,6 @@ def tokenize(expr: str) -> list[str]:
 
 
 def parse_expression(expr: str, facts: dict[str, bool]) -> Node:
-    """
-    Construit un arbre syntaxique à partir d'une expression contenant
-    les opérateurs +, |, ^, sans priorité (seulement les parenthèses).
-    """
     tokens = tokenize(expr)
 
     def parse_tokens(start=0):
@@ -113,7 +108,7 @@ def parse_expression(expr: str, facts: dict[str, bool]) -> Node:
             elif token == '(':
                 subtree, j = parse_tokens(i + 1)
                 values.append(subtree)
-                i = j  # avancer jusqu'à la parenthèse fermante
+                i = j 
 
             elif token == ')':
                 break
@@ -123,11 +118,9 @@ def parse_expression(expr: str, facts: dict[str, bool]) -> Node:
 
             i += 1
 
-        # Si pas d'opérateurs : retour du seul élément
         if not ops:
             return values[0], i
 
-        # Construction gauche-droite
         root = Node(ops[0], NodeTypes.OPERATOR, left=values[0], right=values[1])
         for op, val in zip(ops[1:], values[2:]):
             root = Node(op, NodeTypes.OPERATOR, left=root, right=val)

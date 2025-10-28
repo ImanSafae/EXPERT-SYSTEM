@@ -8,7 +8,7 @@ class Node:
     value: bool | None
     left: Node | None
     right: Node | None
-    children: list[Node]  # this only exists if the type of the Node is FACT.
+    children: list[Node]
 
     def __init__(self, name: str, type: NodeTypes, value: bool | None = False, link_type: ChildLinkTypes = ChildLinkTypes.DEFAULT, left: Node | None = None, right: Node | None = None):
         self.name = name

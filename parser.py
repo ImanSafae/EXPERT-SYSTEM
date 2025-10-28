@@ -76,7 +76,6 @@ def parse(file: str) -> tuple[list[Rule], dict[str, bool], list[str]]:
         if '#' in line:
             line = line.split('#')[0].strip()
         if line:
-            # Process the line (e.g., parse rules, facts, queries)
             if line.startswith('='):
                 have_init_facts = True
                 parse_facts(line, facts)
@@ -84,7 +83,6 @@ def parse(file: str) -> tuple[list[Rule], dict[str, bool], list[str]]:
                 have_query = True
                 queries.extend(parse_query(line))
             else:
-                # Process rules
                 rules.extend(extract_rule(line))
     if not have_init_facts:
         raise SyntaxError("No initial facts provided.")
