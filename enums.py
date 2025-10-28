@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class OperatorsEnum(Enum):
     AND = "+"
     OR = "|"
@@ -21,3 +20,15 @@ class TokensEnum(Enum):
 class RelationEnum(Enum):
     IMPLICATION = "=>"
     BICONDITIONAL = "<=>"
+
+
+class NodeTypes(Enum):
+    OPERATOR = 0
+    FACT = 1  # a letter, a query to be solved
+    PHRASE = 2  # temporary node (like "(A + B)") that will be decomposed
+    BOOLEAN = 3  # type of node that will hold a boolean value after evaluation
+
+
+class ChildLinkTypes(Enum):
+    DEFAULT = 0
+    INVERTED = 1

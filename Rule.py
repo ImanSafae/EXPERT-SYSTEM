@@ -2,14 +2,14 @@ from enums import RelationEnum, TokensEnum
 
 
 class Rule:
-    conditions = []
-    conclusions = []
+    conditions: str = ""
+    conclusions: str = ""
     relation = ""
 
     condition_tokens = []
     conclusion_tokens = []
 
-    def __init__(self, conditions, conclusions, relation: RelationEnum):
+    def __init__(self, conditions: str, conclusions: str, relation: RelationEnum):
         relation = relation.lower()
         self.conditions = conditions.strip()
         self.conclusions = conclusions.strip()
@@ -25,17 +25,11 @@ class Rule:
             raise ValueError(f"Wrong conclusion format: {conclusions}")
         self.conclusion_tokens = conclusion_tokens
 
-    def get_conditions(self):
-        return self.conditions
-
-    def get_conclusions(self):
-        return self.conclusions
-
     def __str__(self):
         return f"{self.conditions}{self.relation}{self.conclusions}"
 
     @staticmethod
-    def tokenize(str):
+    def tokenize(str: str) -> list[tuple[TokensEnum, str]]:
         tokens = []
         str = str.strip()
         for char in str:
