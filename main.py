@@ -30,9 +30,14 @@ if __name__ == "__main__":
             if args.interactive:
                 q = input("Enter your query (or 'exit' to quit): ")
                 while q != 'exit':
-                    nfacts, nqueries = parse_user_input(q)
-                    trees = resolve(rules, nfacts if nfacts else facts, nqueries if nqueries else queries)
-                    print_trees(trees, args.visual)
+                    try:
+                        nfacts, nqueries = parse_user_input(q)
+                        trees = resolve(rules, nfacts if nfacts else facts, nqueries if nqueries else queries)
+                        print_trees(trees, args.visual)
+                    except SyntaxError as se:
+                        print(f"Syntax Error: {se}")
+                    except Exception as e:
+                        print(f"Error: {e}")
                     q = input("Enter your query (or 'exit' to quit): ")
 
         except SyntaxError as se:

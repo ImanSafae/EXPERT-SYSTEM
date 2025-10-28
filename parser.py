@@ -12,13 +12,20 @@ def init_facts() -> dict[str, bool]:
     return facts
 
 def parse_user_input(exp: str) -> tuple[dict[str, bool] | None, list[str] | None]:
+    exp = exp.strip().upper()
     queries = None
     facts = None
-    if exp.startswith('?'):
-        queries = parse_query(exp)
-    if exp.startswith('='):
-        facts = init_facts()
-        parse_facts(exp, facts)
+    if '?' not in exp and '=' not in exp:
+        raise SyntaxError("Invalid user input format. Usage: '=FACTS' or '?QUERIES'")
+    lines = exp.split(' ')
+    if len(lines) > 2:
+        raise SyntaxError("Invalid user input format. Usage: '=FACTS' or '?QUERIES'")
+    for line in lines:
+        if line.startswith('?'):
+            queries = parse_query(line)
+        if line.startswith('='):
+            facts = init_facts()
+            parse_facts(line, facts)
     return facts, queries
 
 def extract_rule(line) -> list[Rule]:
