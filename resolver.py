@@ -91,47 +91,69 @@ def tokenize(expr: str) -> list[str]:
         i += 1
     return tokens
 
-
 def parse_expression(expr: str, facts: dict[str, bool]) -> Node:
     tokens = tokenize(expr)
+
+    precedence = {'+': 3, '|': 2, '^': 1}
 
     def parse_tokens(start=0, invert_fact=False, invert_op=False):
         values = []
         ops: list[tuple[str, bool]] = []
         i = start
+
+        def apply_last_op():
+            op, inv = ops.pop()
+            right = values.pop()
+            left = values.pop()
+            node = Node(
+                op,
+                NodeTypes.OPERATOR,
+                left=left,
+                right=right,
+                link_type=ChildLinkTypes.INVERTED if inv else ChildLinkTypes.DEFAULT,
+            )
+            values.append(node)
+
         while i < len(tokens):
             token = tokens[i]
-            if token == '!' and tokens[i + 1] == '(':
+
+            # gestion de la négation
+            if token == '!' and i + 1 < len(tokens) and tokens[i + 1] == '(':
                 invert_op = True
-            elif token == '!' and tokens[i + 1].isalpha():
+            elif token == '!' and i + 1 < len(tokens) and tokens[i + 1].isalpha():
                 invert_fact = True
-            
-            if token.isalpha():
-                values.append(Node(token, NodeTypes.FACT, value=facts[token] if (not invert_fact) else (not facts[token]), invert=invert_fact))
+
+            elif token.isalpha():
+                values.append(
+                    Node(
+                        token,
+                        NodeTypes.FACT,
+                        value=facts[token] if not invert_fact else (not facts[token]),
+                        invert=invert_fact
+                    )
+                )
                 invert_fact = False
 
             elif token == '(':
                 subtree, j = parse_tokens(i + 1, invert_fact, invert_op)
                 values.append(subtree)
-                i = j 
+                i = j
 
             elif token == ')':
                 invert_op = False
                 break
 
             elif token in "+|^":
+                while ops and precedence[ops[-1][0]] >= precedence[token]:
+                    apply_last_op()
                 ops.append((token, invert_op))
 
             i += 1
 
-        if not ops:
-            return values[0], i
-        
-        root = Node(ops[0][0], NodeTypes.OPERATOR, left=values[0], right=values[1], link_type=ChildLinkTypes.INVERTED if ops[0][1] else ChildLinkTypes.DEFAULT)
-        invert_op = False
-        for op, val in zip(ops[1:], values[2:]):
-            root = Node(op[0], NodeTypes.OPERATOR, left=root, right=val)
-        return root, i
+        while ops:
+            apply_last_op()
+
+        return values[0], i
 
     tree, _ = parse_tokens()
     return tree
