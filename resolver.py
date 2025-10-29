@@ -78,13 +78,13 @@ def tokenize(expr: str) -> list[str]:
         if c.isspace():
             i += 1
             continue
-        elif c.isalnum():  # variable ou nombre
+        elif c.isalpha():  # variable ou nombre
             val = c
-            while i + 1 < len(expr) and expr[i + 1].isalnum():
+            while i + 1 < len(expr) and expr[i + 1].isalpha():
                 i += 1
                 val += expr[i]
             tokens.append(val)
-        elif c in "+|^()":
+        elif c in "+|^()!":
             tokens.append(c)
         else:
             raise ValueError(f"Caractère invalide : {c}")
@@ -95,36 +95,42 @@ def tokenize(expr: str) -> list[str]:
 def parse_expression(expr: str, facts: dict[str, bool]) -> Node:
     tokens = tokenize(expr)
 
-    def parse_tokens(start=0):
+    def parse_tokens(start=0, invert_fact=False, invert_op=False):
         values = []
-        ops = []
+        ops: list[tuple[str, bool]] = []
         i = start
         while i < len(tokens):
             token = tokens[i]
-
+            if token == '!' and tokens[i + 1] == '(':
+                invert_op = True
+            elif token == '!' and tokens[i + 1].isalpha():
+                invert_fact = True
+            
             if token.isalpha():
-                values.append(Node(token, NodeTypes.FACT, value=facts[token]))
+                values.append(Node(token, NodeTypes.FACT, value=facts[token] if (not invert_fact) else (not facts[token]), invert=invert_fact))
+                invert_fact = False
 
             elif token == '(':
-                subtree, j = parse_tokens(i + 1)
+                subtree, j = parse_tokens(i + 1, invert_fact, invert_op)
                 values.append(subtree)
                 i = j 
 
             elif token == ')':
+                invert_op = False
                 break
 
             elif token in "+|^":
-                ops.append(token)
+                ops.append((token, invert_op))
 
             i += 1
 
         if not ops:
             return values[0], i
-
-        root = Node(ops[0], NodeTypes.OPERATOR, left=values[0], right=values[1])
+        
+        root = Node(ops[0][0], NodeTypes.OPERATOR, left=values[0], right=values[1], link_type=ChildLinkTypes.INVERTED if ops[0][1] else ChildLinkTypes.DEFAULT)
+        invert_op = False
         for op, val in zip(ops[1:], values[2:]):
-            root = Node(op, NodeTypes.OPERATOR, left=root, right=val)
-
+            root = Node(op[0], NodeTypes.OPERATOR, left=root, right=val)
         return root, i
 
     tree, _ = parse_tokens()
@@ -149,7 +155,6 @@ def make_tree(query: str, rules: list[Rule], facts: dict[str, bool]) -> Node:
             queue.append(rule.__str__())
             
             new_child = parse_expression(rule.conditions, facts)
-            new_child.link_type = ChildLinkTypes.INVERTED if query in rule.conclusions and "!" in rule.conclusions else ChildLinkTypes.DEFAULT
             if new_child.type == NodeTypes.FACT:
                 new_child.children.extend(find_children(new_child.name))
             if new_child.type == NodeTypes.OPERATOR:
@@ -174,6 +179,8 @@ def solve_condition(node: Node, type: OperatorsEnum):
             node.value = lvalue ^ rvalue
         case OperatorsEnum.NOT:
             node.value = not node.value
+    if node.link_type == ChildLinkTypes.INVERTED:
+        node.value = not node.value
 
 def solve_operator(node: Node) -> None:
     if node.left.type == NodeTypes.OPERATOR:
@@ -197,12 +204,8 @@ def resolve_tree(tree: Node) -> dict[str, bool]:
             child.value = child.link_type == ChildLinkTypes.DEFAULT
 
     if len(tree.children) > 1:
-        if all(child.value is True for child in tree.children):
+        if any(child.value is True for child in tree.children):
             tree.value = True
-        elif all(child.value is False for child in tree.children):
-            tree.value = False
-        else:
-            tree.value = None
     elif len(tree.children) == 1:
         tree.value = tree.children[0].value
 
@@ -213,6 +216,6 @@ def resolve(rules: list[Rule], facts: dict[str, bool], queries: list[str]) -> li
         resolve_tree(tree)
         _, contradiction = eval_node(tree, facts)
         if contradiction:
-            raise Exception("Contradiction found")
+            print("Contradiction found")
         trees.append(tree)
     return trees
