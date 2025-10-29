@@ -43,6 +43,7 @@ if __name__ == "__main__":
         except SyntaxError as se:
                 print(f"Syntax Error: {se}")
         except Exception as e:
+            raise e
             print(f"Error: {e}")
         except KeyboardInterrupt:
             pass

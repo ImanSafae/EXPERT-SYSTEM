@@ -147,10 +147,15 @@ def make_tree(query: str, rules: list[Rule], facts: dict[str, bool]) -> Node:
             if rule.__str__() in queue:
                 continue
             queue.append(rule.__str__())
+            
             new_child = parse_expression(rule.conditions, facts)
             new_child.link_type = ChildLinkTypes.INVERTED if query in rule.conclusions and "!" in rule.conclusions else ChildLinkTypes.DEFAULT
             if new_child.type == NodeTypes.FACT:
                 new_child.children.extend(find_children(new_child.name))
+            if new_child.type == NodeTypes.OPERATOR:
+                for node in [new_child.left, new_child.right]:
+                    if node.type == NodeTypes.FACT:
+                        node.children.extend(find_children(node.name))
             child.append(new_child)
         return child
     
@@ -173,20 +178,24 @@ def solve_condition(node: Node, type: OperatorsEnum):
 def solve_operator(node: Node) -> None:
     if node.left.type == NodeTypes.OPERATOR:
         solve_operator(node.left)
+    else:
+        resolve_tree(node.left)
     if node.right.type == NodeTypes.OPERATOR:
         solve_operator(node.right)
+    else:
+        resolve_tree(node.right)
     solve_condition(node, OperatorsEnum(node.name))
 
 
 def resolve_tree(tree: Node) -> dict[str, bool]:
     for child in tree.get_children():
-        if (child.type == NodeTypes.OPERATOR):
+        if child.type == NodeTypes.OPERATOR:
             solve_operator(child)
         else:
             resolve_tree(child)
-        
         if child.value is True:
             child.value = child.link_type == ChildLinkTypes.DEFAULT
+
     if len(tree.children) > 1:
         if all(child.value is True for child in tree.children):
             tree.value = True

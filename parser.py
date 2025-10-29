@@ -28,7 +28,7 @@ def parse_user_input(exp: str) -> tuple[dict[str, bool] | None, list[str] | None
             parse_facts(line, facts)
     return facts, queries
 
-def extract_rule(line) -> list[Rule]:
+def extract_rule(line: str) -> list[Rule]:
     rules: list[Rule] = []
     relation = ""
     split_rule = line.split("<=>")
