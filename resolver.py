@@ -143,17 +143,17 @@ def make_tree(query: str, rules: list[Rule], facts: dict[str, bool]) -> Node:
     are possible. Protects against cycles using the `seen` set and
     avoids re-expanding a fact that already has children.
     """
-    queue = []
     parent = Node(query, NodeTypes.FACT, facts.get(query))
+    seen = [] # for bidirectional search
 
     def find_children(query: str):
         associated_rules = find_associated_rules(query, rules)
         child = []
         for rule in associated_rules:
-            if rule.__str__() in queue:
+            if rule.__str__() in seen:
                 continue
-            queue.append(rule.__str__())
-            
+            if '<=>' in rule.__str__() and rule.__str__() not in seen:
+                seen.append(rule.__str__())
             new_child = parse_expression(rule.conditions, facts)
             if new_child.type == NodeTypes.FACT:
                 new_child.children.extend(find_children(new_child.name))
